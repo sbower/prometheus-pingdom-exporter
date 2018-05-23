@@ -27,6 +27,12 @@ var (
 	waitSeconds int
 	port        int
 
+	pingdomCheckResponseTimeHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "pingdom_check_response_time_histogram",
+		Help:    "The response time test in milliseconds",
+		Buckets: []float64{100, 250, 500, 1000, 2000, 5000, 10000},
+	}, []string{"id", "name", "hostname", "resolution", "paused", "tags"})
+
 	pingdomUp = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "pingdom_up",
 		Help: "Whether the last pingdom scrape was successfull (1: up, 0: down)",
@@ -52,6 +58,7 @@ func init() {
 	prometheus.MustRegister(pingdomUp)
 	prometheus.MustRegister(pingdomCheckStatus)
 	prometheus.MustRegister(pingdomCheckResponseTime)
+	prometheus.MustRegister(pingdomCheckResponseTimeHistogram)
 }
 
 func sleep() {
@@ -146,6 +153,15 @@ func serverRun(cmd *cobra.Command, args []string) {
 					paused,
 					tags,
 				).Set(float64(check.LastResponseTime))
+
+				pingdomCheckResponseTimeHistogram.WithLabelValues(
+					id,
+					check.Name,
+					check.Hostname,
+					resolution,
+					paused,
+					tags,
+				).Observe(float64(check.LastResponseTime))
 			}
 
 			sleep()
