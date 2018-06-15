@@ -33,6 +33,12 @@ var (
 		Buckets: []float64{100, 250, 500, 1000, 2000, 5000, 10000},
 	}, []string{"id", "name", "hostname", "resolution", "paused", "tags"})
 
+	pingdomCheckStatusHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "pingdom_check_status_histogram",
+		Help:    "The current status of the check (1: up, 0: down)",
+		Buckets: []float64{0, 1},
+	}, []string{"id", "name", "hostname", "resolution", "paused", "tags"})
+
 	pingdomUp = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "pingdom_up",
 		Help: "Whether the last pingdom scrape was successfull (1: up, 0: down)",
@@ -59,6 +65,7 @@ func init() {
 	prometheus.MustRegister(pingdomCheckStatus)
 	prometheus.MustRegister(pingdomCheckResponseTime)
 	prometheus.MustRegister(pingdomCheckResponseTimeHistogram)
+	prometheus.MustRegister(pingdomCheckStatusHistogram)
 }
 
 func sleep() {
@@ -121,6 +128,13 @@ func serverRun(cmd *cobra.Command, args []string) {
 					status = 100
 				}
 
+				var up_down float64
+				if status < 1 {
+					up_down = 1
+				} else {
+					up_down = 0
+				}
+
 				resolution := strconv.Itoa(check.Resolution)
 
 				paused := strconv.FormatBool(check.Paused)
@@ -162,6 +176,15 @@ func serverRun(cmd *cobra.Command, args []string) {
 					paused,
 					tags,
 				).Observe(float64(check.LastResponseTime))
+
+				pingdomCheckStatusHistogram.WithLabelValues(
+					id,
+					check.Name,
+					check.Hostname,
+					resolution,
+					paused,
+					tags,
+				).Observe(up_down)
 			}
 
 			sleep()
